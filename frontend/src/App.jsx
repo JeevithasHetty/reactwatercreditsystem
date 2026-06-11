@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth }  from './context/AuthContext';
 import { CartProvider }           from './context/CartContext';
 import { SocketProvider }         from './context/SocketContext';
-import Navbar                     from './components/Navbar';
+import Navbar                     from './components/NavBar';
 import NotificationToasts         from './components/NotificationToasts';
 import './index.css';
 
