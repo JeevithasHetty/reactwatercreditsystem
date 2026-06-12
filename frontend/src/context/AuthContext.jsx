@@ -5,7 +5,7 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user,    setUser]    = useState(null);
-  const [token,   setToken]   = useState(() => localStorage.getItem('aq_token'));
+  const [token,   setToken]   = useState(() => localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,14 +30,16 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = (userData, jwt) => {
-    localStorage.setItem('aq_token', jwt);
+    localStorage.setItem('token', jwt);
+    localStorage.setItem('user', JSON.stringify(userData));
     axios.defaults.headers.common['Authorization'] = `Bearer ${jwt}`;
     setToken(jwt);
     setUser(userData);
   };
 
   const logout = () => {
-    localStorage.removeItem('aq_token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     delete axios.defaults.headers.common['Authorization'];
     setToken(null);
     setUser(null);

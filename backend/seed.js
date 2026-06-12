@@ -10,7 +10,7 @@ const seed = async () => {
   await Promise.all([User.deleteMany({}), Listing.deleteMany({}), TV.deleteMany({})]);
   console.log('✓ Cleared DB');
 
-  const pw = await bcrypt.hash('password123', 12);
+  const pw = 'password123';
 
   const admin   = await User.create({ name:'Super Admin',         email:'admin@water.com',        password:pw, role:'admin',       verified:true });
   const buyer1  = await User.create({ name:'Ravi Kumar',          email:'ravi@buyer.com',          password:pw, role:'buyer',       verified:true });
