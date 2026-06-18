@@ -1,201 +1,74 @@
-require('dotenv').config();
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const cors = require('cors');
-const connectDB = require('./config/db');
-const jwt = require('jsonwebtoken');
-const User = require('./models/User');
+import axios from "axios";
 
-const app = express();
-const server = http.createServer(app);
-
-/* -------------------------------------------------------------------------- */
-/*                               Allowed Origins                              */
-/* -------------------------------------------------------------------------- */
-
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
-  'http://127.0.0.1:5173',
-  'https://reactwatercreditsystem.vercel.app' // replace with your exact Vercel URL
-];
-
-/* -------------------------------------------------------------------------- */
-/*                                Socket.io                                   */
-/* -------------------------------------------------------------------------- */
-
-const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true,
-  },
-  transports: ['websocket', 'polling'],
+// Base URL points to Railway backend + /api
+const api = axios.create({
+  baseURL: `${import.meta.env.VITE_API_URL}/api`,
 });
 
-/* -------------------------------------------------------------------------- */
-/*                         Socket.io JWT Middleware                            */
-/* -------------------------------------------------------------------------- */
+// Automatically attach JWT token
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
 
-io.use(async (socket, next) => {
-  try {
-    const token = socket.handshake.auth?.token;
-
-    if (!token) {
-      return next(new Error('Authentication required'));
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    const user = await User.findById(decoded.id).select('-password');
-
-    if (!user) {
-      return next(new Error('User not found'));
-    }
-
-    socket.user = user;
-    next();
-  } catch (err) {
-    next(new Error('Invalid token'));
-  }
-});
-
-/* -------------------------------------------------------------------------- */
-/*                             Socket Connection                              */
-/* -------------------------------------------------------------------------- */
-
-io.on('connection', (socket) => {
-  const user = socket.user;
-
-  console.log(`[WS] Connected: ${user.name} (${user.role})`);
-
-  socket.join(`user:${user._id}`);
-
-  if (user.role === 'transporter') {
-    socket.join('transporters');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
 
-  if (user.role === 'admin') {
-    socket.join('admins');
-  }
-
-  socket.on('track_order', (orderId) => {
-    socket.join(`order:${orderId}`);
-  });
-
-  socket.on('untrack_order', (orderId) => {
-    socket.leave(`order:${orderId}`);
-  });
-
-  socket.on('location_update', async ({ lat, lng }) => {
-    try {
-      await User.findByIdAndUpdate(user._id, {
-        liveLocation: {
-          lat,
-          lng,
-          updatedAt: new Date(),
-        },
-      });
-
-      io.to('admins').emit('transporter_location', {
-        transporterId: user._id,
-        name: user.name,
-        lat,
-        lng,
-      });
-    } catch (err) {
-      console.error(err.message);
-    }
-  });
-
-  socket.on('disconnect', (reason) => {
-    console.log(`[WS] Disconnected: ${user.name} (${reason})`);
-  });
+  return config;
 });
 
-/* -------------------------------------------------------------------------- */
-/*                            Attach io to requests                           */
-/* -------------------------------------------------------------------------- */
+// -------------------- AUTH --------------------
+export const authAPI = {
+  signup: (data) => api.post("/auth/signup", data),
+  login: (data) => api.post("/auth/login", data),
+  me: () => api.get("/auth/me"),
+};
 
-app.use((req, res, next) => {
-  req.io = io;
-  next();
-});
+// -------------------- LISTINGS --------------------
+export const listingsAPI = {
+  getAll: (params) => api.get("/listings", { params }),
+  getMy: () => api.get("/listings/my"),
+  create: (data) => api.post("/listings", data),
+  delete: (id) => api.delete(`/listings/${id}`),
+};
 
-/* -------------------------------------------------------------------------- */
-/*                              Express Middleware                            */
-/* -------------------------------------------------------------------------- */
+// -------------------- ORDERS --------------------
+export const ordersAPI = {
+  checkout: (data) => api.post("/orders", data),
+  getBuyer: () => api.get("/orders/buyer"),
+  getSeller: () => api.get("/orders/seller"),
+};
 
-app.use(
-  cors({
-    origin: allowedOrigins,
-    credentials: true,
-  })
-);
+// -------------------- TRANSPORTER --------------------
+export const transporterAPI = {
+  setAvail: (availability) =>
+    api.put("/transporter/availability", { availability }),
 
-app.use(express.json());
+  getOrders: () =>
+    api.get("/transporter/orders"),
 
-/* -------------------------------------------------------------------------- */
-/*                                   Routes                                   */
-/* -------------------------------------------------------------------------- */
+  updateStatus: (id, status) =>
+    api.put(`/transporter/orders/${id}/status`, { status }),
 
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/listings', require('./routes/listingRoutes'));
-app.use('/api/orders', require('./routes/orderRoutes'));
-app.use('/api/transporter', require('./routes/transporterRoutes'));
-app.use('/api/admin', require('./routes/adminRoutes'));
+  updateLoc: (lat, lng) =>
+    api.put("/transporter/location", { lat, lng }),
+};
 
-/* -------------------------------------------------------------------------- */
-/*                              Health Endpoint                               */
-/* -------------------------------------------------------------------------- */
+// -------------------- ADMIN --------------------
+export const adminAPI = {
+  getTransporters: () =>
+    api.get("/admin/transporters"),
 
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'OK',
-    websocket: 'enabled',
-    time: new Date(),
-  });
-});
+  getVerifications: () =>
+    api.get("/admin/verifications"),
 
-/* -------------------------------------------------------------------------- */
-/*                                404 Handler                                 */
-/* -------------------------------------------------------------------------- */
+  makeDecision: (id, data) =>
+    api.post(`/admin/transporters/${id}/decision`, data),
 
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: `Route not found: ${req.method} ${req.path}`,
-  });
-});
+  getAllOrders: () =>
+    api.get("/admin/orders"),
 
-/* -------------------------------------------------------------------------- */
-/*                            Global Error Handler                            */
-/* -------------------------------------------------------------------------- */
+  getStats: () =>
+    api.get("/admin/stats"),
+};
 
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-
-  res.status(500).json({
-    success: false,
-    message: err.message || 'Server error',
-  });
-});
-
-/* -------------------------------------------------------------------------- */
-/*                             Start Application                              */
-/* -------------------------------------------------------------------------- */
-
-const PORT = process.env.PORT || 5000;
-
-server.listen(PORT, async () => {
-  console.log(`🚀 AquaFlow V2 running on port ${PORT}`);
-  console.log('🔌 WebSocket server enabled');
-
-  try {
-    await connectDB();
-    console.log('✅ MongoDB connected');
-  } catch (err) {
-    console.error('❌ MongoDB connection failed:', err.message);
-  }
-});
+export default api;
