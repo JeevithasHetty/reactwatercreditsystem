@@ -1,46 +1,201 @@
-import axios from 'axios';
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+require('dotenv').config();
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
+const connectDB = require('./config/db');
+const jwt = require('jsonwebtoken');
+const User = require('./models/User');
+
+const app = express();
+const server = http.createServer(app);
+
+/* -------------------------------------------------------------------------- */
+/*                               Allowed Origins                              */
+/* -------------------------------------------------------------------------- */
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'https://reactwatercreditsystem.vercel.app' // replace with your exact Vercel URL
+];
+
+/* -------------------------------------------------------------------------- */
+/*                                Socket.io                                   */
+/* -------------------------------------------------------------------------- */
+
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true,
+  },
+  transports: ['websocket', 'polling'],
 });
 
-api.interceptors.request.use(cfg => {
-  const t = localStorage.getItem('token');
-  if (t) cfg.headers.Authorization = `Bearer ${t}`;
-  return cfg;
+/* -------------------------------------------------------------------------- */
+/*                         Socket.io JWT Middleware                            */
+/* -------------------------------------------------------------------------- */
+
+io.use(async (socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token;
+
+    if (!token) {
+      return next(new Error('Authentication required'));
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const user = await User.findById(decoded.id).select('-password');
+
+    if (!user) {
+      return next(new Error('User not found'));
+    }
+
+    socket.user = user;
+    next();
+  } catch (err) {
+    next(new Error('Invalid token'));
+  }
 });
 
-export const authAPI = {
-  signup: d => api.post('/auth/signup', d),
-  login:  d => api.post('/auth/login', d),
-  me:     () => api.get('/auth/me'),
-};
+/* -------------------------------------------------------------------------- */
+/*                             Socket Connection                              */
+/* -------------------------------------------------------------------------- */
 
-export const listingsAPI = {
-  getAll: p  => api.get('/listings', { params: p }),
-  getMy:  () => api.get('/listings/my'),
-  create: d  => api.post('/listings', d),
-  delete: id => api.delete(`/listings/${id}`),
-};
+io.on('connection', (socket) => {
+  const user = socket.user;
 
-export const ordersAPI = {
-  checkout:   d  => api.post('/orders', d),
-  getBuyer:   () => api.get('/orders/buyer'),
-  getSeller:  () => api.get('/orders/seller'),
-};
+  console.log(`[WS] Connected: ${user.name} (${user.role})`);
 
-export const transporterAPI = {
-  setAvail:     a        => api.put('/transporter/availability', { availability: a }),
-  getOrders:    ()       => api.get('/transporter/orders'),
-  updateStatus: (id, s)  => api.put(`/transporter/orders/${id}/status`, { status: s }),
-  updateLoc:    (lat,lng)=> api.put('/transporter/location', { lat, lng }),
-};
+  socket.join(`user:${user._id}`);
 
-export const adminAPI = {
-  getTransporters:  () => api.get('/admin/transporters'),
-  getVerifications: () => api.get('/admin/verifications'),
-  makeDecision: (id, d) => api.post(`/admin/transporters/${id}/decision`, d),
-  getAllOrders:      () => api.get('/admin/orders'),
-  getStats:         () => api.get('/admin/stats'),
-};
+  if (user.role === 'transporter') {
+    socket.join('transporters');
+  }
 
-export default api;
+  if (user.role === 'admin') {
+    socket.join('admins');
+  }
+
+  socket.on('track_order', (orderId) => {
+    socket.join(`order:${orderId}`);
+  });
+
+  socket.on('untrack_order', (orderId) => {
+    socket.leave(`order:${orderId}`);
+  });
+
+  socket.on('location_update', async ({ lat, lng }) => {
+    try {
+      await User.findByIdAndUpdate(user._id, {
+        liveLocation: {
+          lat,
+          lng,
+          updatedAt: new Date(),
+        },
+      });
+
+      io.to('admins').emit('transporter_location', {
+        transporterId: user._id,
+        name: user.name,
+        lat,
+        lng,
+      });
+    } catch (err) {
+      console.error(err.message);
+    }
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log(`[WS] Disconnected: ${user.name} (${reason})`);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*                            Attach io to requests                           */
+/* -------------------------------------------------------------------------- */
+
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
+/* -------------------------------------------------------------------------- */
+/*                              Express Middleware                            */
+/* -------------------------------------------------------------------------- */
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  })
+);
+
+app.use(express.json());
+
+/* -------------------------------------------------------------------------- */
+/*                                   Routes                                   */
+/* -------------------------------------------------------------------------- */
+
+app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/listings', require('./routes/listingRoutes'));
+app.use('/api/orders', require('./routes/orderRoutes'));
+app.use('/api/transporter', require('./routes/transporterRoutes'));
+app.use('/api/admin', require('./routes/adminRoutes'));
+
+/* -------------------------------------------------------------------------- */
+/*                              Health Endpoint                               */
+/* -------------------------------------------------------------------------- */
+
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    websocket: 'enabled',
+    time: new Date(),
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*                                404 Handler                                 */
+/* -------------------------------------------------------------------------- */
+
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.path}`,
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*                            Global Error Handler                            */
+/* -------------------------------------------------------------------------- */
+
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+
+  res.status(500).json({
+    success: false,
+    message: err.message || 'Server error',
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*                             Start Application                              */
+/* -------------------------------------------------------------------------- */
+
+const PORT = process.env.PORT || 5000;
+
+server.listen(PORT, async () => {
+  console.log(`🚀 AquaFlow V2 running on port ${PORT}`);
+  console.log('🔌 WebSocket server enabled');
+
+  try {
+    await connectDB();
+    console.log('✅ MongoDB connected');
+  } catch (err) {
+    console.error('❌ MongoDB connection failed:', err.message);
+  }
+});
