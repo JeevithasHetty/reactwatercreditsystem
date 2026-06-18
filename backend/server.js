@@ -115,14 +115,16 @@ app.use((err, req, res, next) => {
 });
 
 // ─── Start server ─────────────────────────────────────────────────────────────
-connectDB().then(() => {
-  const PORT = process.env.PORT || 5000;
-  server.listen(PORT, () => {
-    console.log(`\n🚀 AquaFlow V2 running on http://localhost:${PORT}`);
-    console.log(`🔌 WebSocket server enabled`);
-    console.log(`🗄️  MongoDB: ${process.env.MONGO_URI}\n`);
-  });
-}).catch((err) => {
-  console.error('Failed to connect to MongoDB:', err.message);
-  process.exit(1);
+const PORT = process.env.PORT || 5000;
+
+server.listen(PORT, async () => {
+  console.log(`🚀 AquaFlow V2 running on port ${PORT}`);
+  console.log(`🔌 WebSocket server enabled`);
+
+  try {
+    await connectDB();
+    console.log('✅ MongoDB connected');
+  } catch (err) {
+    console.error('❌ Failed to connect to MongoDB:', err.message);
+  }
 });
