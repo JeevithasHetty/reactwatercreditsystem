@@ -1,7 +1,12 @@
 import React, { useEffect } from "react";
-import io from "socket.io-client";
+import { io } from "socket.io-client";
 
-const socket = io("http://localhost:5000");
+const socket = io(
+  import.meta.env.VITE_SOCKET_URL || "http://localhost:5000",
+  {
+    transports: ["websocket", "polling"],
+  }
+);
 
 function Tracking() {
   useEffect(() => {
@@ -9,7 +14,9 @@ function Tracking() {
       console.log("Truck location:", data);
     });
 
-    return () => socket.disconnect();
+    return () => {
+      socket.off("receiveLocation");
+    };
   }, []);
 
   return <h2>Live Truck Tracking</h2>;
