@@ -11,21 +11,15 @@ const app    = express();
 const server = http.createServer(app);
 
 // ─── Socket.io setup ─────────────────────────────────────────────────────────
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
-  'http://127.0.0.1:5173',
-  'https://reactwatercreditsystem.vercel.app' // Replace with your actual Vercel URL
-];
-
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'],
     methods: ['GET', 'POST'],
     credentials: true,
   },
   transports: ['websocket', 'polling'],
 });
+
 // ─── Socket.io JWT middleware ─────────────────────────────────────────────────
 io.use(async (socket, next) => {
   try {
@@ -85,7 +79,6 @@ io.on('connection', (socket) => {
   });
 });
 
-
 // ─── Attach io to every request so controllers can use it ────────────────────
 app.use((req, res, next) => {
   req.io = io;
@@ -94,51 +87,10 @@ app.use((req, res, next) => {
 
 // ─── Express middleware ───────────────────────────────────────────────────────
 app.use(cors({
-  origin: allowedOrigins,
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'],
   credentials: true,
 }));
 app.use(express.json());
-// TEMPORARY ADMIN CREATION ROUTE
-app.get('/create-admin', async (req, res) => {
-  try {
-    const existing = await User.findOne({
-      email: 'admin@water.com'
-    });
-
-    if (existing) {
-      return res.json({
-        success: true,
-        message: 'Admin already exists'
-      });
-    }
-
-    const admin = await User.create({
-      name: 'Super Admin',
-      email: 'admin@water.com',
-      password: 'password123',
-      role: 'admin',
-      verified: true,
-      availability: 'offline'
-    });
-
-    res.json({
-      success: true,
-      message: 'Admin created successfully',
-      admin: {
-        email: admin.email,
-        role: admin.role
-      }
-    });
-
-  } catch (err) {
-    console.error(err);
-
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
-  }
-});
 
 // ─── REST routes ─────────────────────────────────────────────────────────────
 app.use('/api/auth',        require('./routes/authRoutes'));
@@ -146,6 +98,7 @@ app.use('/api/listings',    require('./routes/listingRoutes'));
 app.use('/api/orders',      require('./routes/orderRoutes'));
 app.use('/api/transporter', require('./routes/transporterRoutes'));
 app.use('/api/admin',       require('./routes/adminRoutes'));
+app.use('/api/ratings',     require('./routes/ratingRoutes'));
 
 app.get('/api/health', (req, res) =>
   res.json({ status: 'OK', websocket: 'enabled', time: new Date() })
@@ -163,17 +116,14 @@ app.use((err, req, res, next) => {
 });
 
 // ─── Start server ─────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 5000;
-
-server.listen(PORT, async () => {
-  console.log(`🚀 AquaFlow V2 running on port ${PORT}`);
-  console.log(`🔌 WebSocket server enabled`);
-
-  try {
-    await connectDB();
-    console.log('✅ MongoDB connected');
-  } catch (err) {
-    console.error('❌ Failed to connect to MongoDB:', err.message);
-    
-  }
+connectDB().then(() => {
+  const PORT = process.env.PORT || 5000;
+  server.listen(PORT, () => {
+    console.log(`\n🚀 AquaFlow V2 running on http://localhost:${PORT}`);
+    console.log(`🔌 WebSocket server enabled`);
+    console.log(`🗄️  MongoDB: ${process.env.MONGO_URI}\n`);
+  });
+}).catch((err) => {
+  console.error('Failed to connect to MongoDB:', err.message);
+  process.exit(1);
 });

@@ -9,7 +9,7 @@ const OrdersAPI = axios.create({
 OrdersAPI.placeOrder = (data) => OrdersAPI.post("/", data);
 OrdersAPI.getBuyerOrders = () => OrdersAPI.get("/buyer");
 OrdersAPI.getSellerOrders = () => OrdersAPI.get("/seller");
-
+OrdersAPI.getSellerAnalytics = () => OrdersAPI.get("/seller/analytics");
 OrdersAPI.interceptors.request.use(config => {
   // Attach token consistently from localStorage (other parts of the app store token under 'token')
   const token = localStorage.getItem("token");

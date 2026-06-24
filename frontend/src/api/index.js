@@ -1,59 +1,53 @@
-import axios from "axios";
+import axios from 'axios';
 
-const api = axios.create({
-  baseURL: `${import.meta.env.VITE_API_URL}/api`,
-});
+const api = axios.create({ baseURL: '/api' });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-
-  return config;
+api.interceptors.request.use(cfg => {
+  const t = localStorage.getItem('token');
+  if (t) cfg.headers.Authorization = `Bearer ${t}`;
+  return cfg;
 });
 
 export const authAPI = {
-  signup: (data) => api.post("/auth/signup", data),
-  login: (data) => api.post("/auth/login", data),
-  me: () => api.get("/auth/me"),
+  signup: d => api.post('/auth/signup', d),
+  login:  d => api.post('/auth/login', d),
+  me:     () => api.get('/auth/me'),
 };
 
 export const listingsAPI = {
-  getAll: (params) => api.get("/listings", { params }),
-  getMy: () => api.get("/listings/my"),
-  create: (data) => api.post("/listings", data),
-  delete: (id) => api.delete(`/listings/${id}`),
+  getAll: p  => api.get('/listings', { params: p }),
+  getMy:  () => api.get('/listings/my'),
+  create: d  => api.post('/listings', d),
+  delete: id => api.delete(`/listings/${id}`),
+  restock: (id, addQuantity) => api.put(`/listings/${id}/restock`, { addQuantity }),
 };
 
 export const ordersAPI = {
-  checkout: (data) => api.post("/orders", data),
-  getBuyer: () => api.get("/orders/buyer"),
-  getSeller: () => api.get("/orders/seller"),
+  checkout:   d  => api.post('/orders', d),
+  getBuyer:   () => api.get('/orders/buyer'),
+  getSeller:  () => api.get('/orders/seller'),
 };
 
 export const transporterAPI = {
-  setAvail: (availability) =>
-    api.put("/transporter/availability", { availability }),
-
-  getOrders: () =>
-    api.get("/transporter/orders"),
-
-  updateStatus: (id, status) =>
-    api.put(`/transporter/orders/${id}/status`, { status }),
-
-  updateLoc: (lat, lng) =>
-    api.put("/transporter/location", { lat, lng }),
+  setAvail:     a        => api.put('/transporter/availability', { availability: a }),
+  getOrders:    ()       => api.get('/transporter/orders'),
+  updateStatus: (id, s)  => api.put(`/transporter/orders/${id}/status`, { status: s }),
+  updateLoc:    (lat,lng)=> api.put('/transporter/location', { lat, lng }),
 };
 
 export const adminAPI = {
-  getTransporters: () => api.get("/admin/transporters"),
-  getVerifications: () => api.get("/admin/verifications"),
-  makeDecision: (id, data) =>
-    api.post(`/admin/transporters/${id}/decision`, data),
-  getAllOrders: () => api.get("/admin/orders"),
-  getStats: () => api.get("/admin/stats"),
+  getTransporters:  () => api.get('/admin/transporters'),
+  getVerifications: () => api.get('/admin/verifications'),
+  makeDecision: (id, d) => api.post(`/admin/transporters/${id}/decision`, d),
+  getAllOrders:      () => api.get('/admin/orders'),
+  getStats:         () => api.get('/admin/stats'),
+  getSellers:       () => api.get('/admin/sellers'),
+  assignBadge:      (id, badge) => api.put(`/admin/sellers/${id}/badge`, { badge }),
+};
+
+export const ratingsAPI = {
+  submit: d => api.post('/ratings', d),
+  getSellerRatings: (id) => api.get(`/ratings/seller/${id}`),
 };
 
 export default api;
