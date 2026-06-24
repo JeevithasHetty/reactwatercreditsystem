@@ -85,6 +85,7 @@ io.on('connection', (socket) => {
   });
 });
 
+
 // ─── Attach io to every request so controllers can use it ────────────────────
 app.use((req, res, next) => {
   req.io = io;
@@ -97,6 +98,47 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+// TEMPORARY ADMIN CREATION ROUTE
+app.get('/create-admin', async (req, res) => {
+  try {
+    const existing = await User.findOne({
+      email: 'admin@water.com'
+    });
+
+    if (existing) {
+      return res.json({
+        success: true,
+        message: 'Admin already exists'
+      });
+    }
+
+    const admin = await User.create({
+      name: 'Super Admin',
+      email: 'admin@water.com',
+      password: 'password123',
+      role: 'admin',
+      verified: true,
+      availability: 'offline'
+    });
+
+    res.json({
+      success: true,
+      message: 'Admin created successfully',
+      admin: {
+        email: admin.email,
+        role: admin.role
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+});
 
 // ─── REST routes ─────────────────────────────────────────────────────────────
 app.use('/api/auth',        require('./routes/authRoutes'));
@@ -132,5 +174,6 @@ server.listen(PORT, async () => {
     console.log('✅ MongoDB connected');
   } catch (err) {
     console.error('❌ Failed to connect to MongoDB:', err.message);
+    
   }
 });
