@@ -11,8 +11,9 @@ OrdersAPI.getBuyerOrders = () => OrdersAPI.get("/buyer");
 OrdersAPI.getSellerOrders = () => OrdersAPI.get("/seller");
 
 OrdersAPI.interceptors.request.use(config => {
-  const user = JSON.parse(localStorage.getItem("user"));
-  if (user?.token) config.headers.Authorization = `Bearer ${user.token}`;
+  // Attach token consistently from localStorage (other parts of the app store token under 'token')
+  const token = localStorage.getItem("token");
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 

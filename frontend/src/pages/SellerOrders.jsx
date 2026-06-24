@@ -27,18 +27,10 @@ export default function SellerOrders() {
     }
   };
 
-  const updateStatus = async (orderId, status) => {
-    try {
-      await axios.put(
-        `http://localhost:5000/api/orders/${orderId}/status`,
-        { status },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      loadOrders();
-    } catch (e) {
-      alert(e.response?.data?.message || "Failed to update status");
-    }
-  };
+  // Sellers in this project don't have a backend endpoint to change delivery status directly.
+  // Transporters update delivery status at /api/transporter/orders/:orderId/status and
+  // admins assign transporters at /api/admin/orders/:orderId/assign. To avoid 404/production
+  // errors, we remove the update buttons from the seller UI.
 
   return (
     <div style={{ padding: 20 }}>
@@ -61,11 +53,12 @@ export default function SellerOrders() {
             ))}
           </div>
 
-          <div style={{ marginTop: 10 }}>
-            <button onClick={() => updateStatus(o._id, "Accepted")}>Accept</button>{" "}
-            <button onClick={() => updateStatus(o._id, "Delivered")}>Delivered</button>{" "}
-            <button onClick={() => updateStatus(o._id, "Cancelled")}>Cancel</button>
-          </div>
+          {o.transporter && (
+            <div style={{ marginTop: 10 }}>
+              <b>Transporter:</b> {o.transporter?.name || o.transporter}
+            </div>
+          )}
+
         </div>
       ))}
     </div>
