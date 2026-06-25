@@ -1,7 +1,11 @@
-﻿const jwt  = require('jsonwebtoken');
-const User = require('../models/User');
+﻿const jwt = require("jsonwebtoken");
+const User = require("../models/User");
+const TV = require("../models/TransporterVerification");
 
-const sign = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+const sign = (id) =>
+  jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: "30d",
+  });
 
 const safeUser = (user) => ({
   _id: user._id,
@@ -16,58 +20,171 @@ const safeUser = (user) => ({
   createdAt: user.createdAt,
 });
 
+
+// ======================
+// SIGNUP
+// ======================
 const signup = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const {
+      name,
+      email,
+      password,
+      role,
+      aadhaarNumber,
+      licenseNumber,
+      vehicleType,
+      vehicleCapacity,
+    } = req.body;
 
     if (!name || !email || !password || !role) {
-      return res.status(400).json({ success: false, message: 'All fields required' });
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
     }
 
-    if (!['buyer', 'seller', 'transporter', 'admin'].includes(role)) {
-      return res.status(400).json({ success: false, message: 'Invalid role' });
+    if (!["buyer", "seller", "transporter"].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role",
+      });
     }
 
-    if (await User.findOne({ email })) {
-      return res.status(400).json({ success: false, message: 'Email already registered' });
+    const existing = await User.findOne({ email });
+
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: "Email already registered",
+      });
     }
 
-    const user = await User.create({ name, email, password, role });
+    const user = await User.create({
+      name,
+      email,
+      password,
+      role,
+    });
 
-    return res.status(201).json({ success: true, token: sign(user._id), user: safeUser(user) });
-  } catch (e) {
-    return res.status(500).json({ success: false, message: e.message });
+    // ===========================
+    // Transporter Verification
+    // ===========================
+    if (role === "transporter") {
+      if (!aadhaarNumber || !licenseNumber) {
+        await User.findByIdAndDelete(user._id);
+
+        return res.status(400).json({
+          success: false,
+          message: "Aadhaar Number and License Number are required",
+        });
+      }
+
+      await TV.create({
+        transporter: user._id,
+        aadhaarNumber,
+        licenseNumber,
+        vehicleType: vehicleType || "Tanker",
+        vehicleCapacity: vehicleCapacity || 0,
+        status: "Pending",
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      token: sign(user._id),
+      user: safeUser(user),
+    });
+  } catch (err) {
+    console.error("Signup Error:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 
+
+// ======================
+// LOGIN
+// ======================
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ success: false, message: 'Email and password required' });
+      return res.status(400).json({
+        success: false,
+        message: "Email and Password required",
+      });
     }
 
     const user = await User.findOne({ email });
-    if (!user || !(await user.comparePassword(password))) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials",
+      });
     }
 
-    return res.json({ success: true, token: sign(user._id), user: safeUser(user) });
-  } catch (e) {
-    return res.status(500).json({ success: false, message: e.message });
+    const match = await user.comparePassword(password);
+
+    if (!match) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials",
+      });
+    }
+
+    return res.json({
+      success: true,
+      token: sign(user._id),
+      user: safeUser(user),
+    });
+  } catch (err) {
+    console.error("Login Error:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 
+
+// ======================
+// GET CURRENT USER
+// ======================
 const getMe = async (req, res) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    const user = await User.findById(req.user._id).select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
     }
-    return res.json({ success: true, user: req.user });
-  } catch (e) {
-    return res.status(500).json({ success: false, message: e.message });
+
+    return res.json({
+      success: true,
+      user,
+    });
+  } catch (err) {
+    console.error("GetMe Error:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 
-module.exports = { signup, login, getMe };
+
+module.exports = {
+  signup,
+  login,
+  getMe,
+};
