@@ -10,12 +10,13 @@ const User       = require('./models/User');
 const app    = express();
 const server = http.createServer(app);
 
-// ─── Socket.io setup ─────────────────────────────────────────────────────────
+// ─── Socket.io setup ───────────────────────────────────────────────────────
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
-  'https://reactwatercreditsystem.vercel.app' // Replace with your actual Vercel URL
+  'https://aquaflow-frontend.vercel.app', // Update with your Vercel URL
+  'https://reactwatercreditsystem.vercel.app'
 ];
 
 const io = new Server(server, {
@@ -92,7 +93,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ─── Express middleware ───────────────────────────────────────────────────────
+// ─── Express middleware ──────────────────────────────────────────────────────
 app.use(cors({
   origin: allowedOrigins,
   credentials: true,
@@ -140,7 +141,7 @@ app.get('/create-admin', async (req, res) => {
   }
 });
 
-// ─── REST routes ─────────────────────────────────────────────────────────────
+// ─── REST routes ────────────────────────────────────────────────────────
 app.use('/api/auth',        require('./routes/authRoutes'));
 app.use('/api/listings',    require('./routes/listingRoutes'));
 app.use('/api/orders',      require('./routes/orderRoutes'));
@@ -152,7 +153,7 @@ app.get('/api/health', (req, res) =>
   res.json({ status: 'OK', websocket: 'enabled', time: new Date() })
 );
 
-// ─── 404 handler ─────────────────────────────────────────────────────────────
+// ─── 404 handler ────────────────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ success: false, message: `Route not found: ${req.method} ${req.path}` });
 });
@@ -163,7 +164,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, message: err.message || 'Server error' });
 });
 
-// ─── Start server ─────────────────────────────────────────────────────────────
+// ─── Start server ────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, async () => {
