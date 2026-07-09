@@ -1,0 +1,8 @@
+{
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
+  "env": {
+    "VITE_RAZORPAY_KEY": "@vite_razorpay_key",
+    "VITE_API_URL": "@vite_api_url"
+  }
+}
